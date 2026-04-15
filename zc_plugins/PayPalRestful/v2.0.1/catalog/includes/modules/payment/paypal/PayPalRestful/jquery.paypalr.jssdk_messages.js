@@ -71,31 +71,40 @@ jQuery(function() {
                 return true;
             }
 
-            // First, use .replace to remove characters other than
-            // numerics and comma/period separators (e.g. currency symbols).
-            let price = priceElement.textContent.replace(/[^\d.,]/g, '');
+            // Extract numeric price from the element text (strip currency symbols, etc.)
+            let price = priceElement.textContent.replace(/[^\d.,]/g, '').trim();
 
-            // Next, split the price value into its 2-digit decimal digits (at
-            // the end of string) and its integral portion (to the left of the
-            // decimal point (either a period or comma).
-            //
-            // There "should be" 3 pieces (entire string, integral portion and decimal portion)
-            // returned by the match; if not, cycle to the next price
-            let pieces = price.match(/^([\d.,]+)[.,](\d{2})$/);
-            console.info('Msgs Loop ' + index + ': Price ' + price + ', Pieces: ' + pieces);
-            if (pieces.length !== 3) {
-                return true;
+            // Detect decimal separator (last occurrence of . or ,)
+            let lastDot = price.lastIndexOf('.');
+            let lastComma = price.lastIndexOf(',');
+
+            let normalized;
+
+            // If comma is the decimal separator (e.g. 2,18 or 1.234,56)
+            if (lastComma > lastDot) {
+            normalized = price
+            .replace(/\./g, '')  // remove thousands separators
+            .replace(',', '.');  // convert decimal to dot
+            } else {
+            // Dot is decimal separator (e.g. 2.18 or 1,234.56)
+            normalized = price
+           .replace(/,/g, '');   // remove thousands separators
             }
 
-            // Finally, form the price to be sent to PayPal, removing any '.,' characters
-            // from the integral value and using a period as the decimal separator.
-            price = pieces[1].replace(/[.,]/g, '')+'.'+pieces[2];
-            console.info('Reformatted price: '+price);
+            let numericPrice = parseFloat(normalized);
 
+            // If invalid, skip
+            if (isNaN(numericPrice)) {
+            console.warn('Invalid price detected:', price);
+            return true;
+            }
+
+            // Format to PayPal-required string
+            price = numericPrice.toFixed(2);
+
+            // Apply attributes for PayPal messaging
             $addTo = $findInContainer.length > 1 ? jQuery(element) : $output;
 
-            // The PayPal SDK monitors message elements for changes to its attributes such as data-pp-amount, which we add here,
-            // so their messaging is updated automatically to reflect this amount in whatever messaging PayPal displays.
             $addTo.attr('data-pp-amount', price);
             $addTo.attr('data-pp-currency', paypalPayLaterCurrency);
         });
