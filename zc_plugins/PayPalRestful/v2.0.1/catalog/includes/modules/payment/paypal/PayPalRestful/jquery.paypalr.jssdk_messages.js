@@ -82,21 +82,21 @@ jQuery(function() {
 
             // If comma is the decimal separator (e.g. 2,18 or 1.234,56)
             if (lastComma > lastDot) {
-            normalized = price
-            .replace(/\./g, '')  // remove thousands separators
-            .replace(',', '.');  // convert decimal to dot
+                normalized = price
+                  .replace(/\./g, '')  // remove thousands separators
+                  .replace(',', '.');  // convert decimal to dot
             } else {
-            // Dot is decimal separator (e.g. 2.18 or 1,234.56)
-            normalized = price
-           .replace(/,/g, '');   // remove thousands separators
+                // Dot is decimal separator (e.g. 2.18 or 1,234.56)
+                // remove thousands separators
+                normalized = price.replace(/,/g, '');
             }
 
             let numericPrice = parseFloat(normalized);
 
             // If invalid, skip
             if (isNaN(numericPrice)) {
-            console.warn('Invalid price detected:', price);
-            return true;
+                console.warn('Invalid price detected:', price);
+                return true;
             }
 
             // Format to PayPal-required string
@@ -105,6 +105,8 @@ jQuery(function() {
             // Apply attributes for PayPal messaging
             $addTo = $findInContainer.length > 1 ? jQuery(element) : $output;
 
+            // The PayPal SDK monitors message elements for changes to its attributes such as data-pp-amount, which we add here,
+            // so their messaging is updated automatically to reflect this amount in whatever messaging PayPal displays.
             $addTo.attr('data-pp-amount', price);
             $addTo.attr('data-pp-currency', paypalPayLaterCurrency);
         });
