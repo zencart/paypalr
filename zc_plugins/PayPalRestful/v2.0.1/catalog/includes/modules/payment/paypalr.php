@@ -31,7 +31,7 @@ class paypalr extends \base
 {
     use InteractsWithPlugins;
 
-    const CURRENT_VERSION = '2.0.0';
+    const CURRENT_VERSION = '2.0.1-beta1';
 
     const REDIRECT_LISTENER = HTTP_SERVER . DIR_WS_CATALOG . 'ppr_listener.php';
 
