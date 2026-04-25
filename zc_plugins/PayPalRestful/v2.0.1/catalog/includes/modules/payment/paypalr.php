@@ -6,7 +6,7 @@
  * @copyright Portions Copyright 2003 osCommerce
  * @license http://www.zen-cart.com/license/2_0.txt GNU Public License V2.0
  *
- * Last updated: v2.0.0
+ * Last updated: v2.0.1
  */
 use PayPalRestful\Admin\AdminMain;
 use PayPalRestful\Admin\DoAuthorization;
