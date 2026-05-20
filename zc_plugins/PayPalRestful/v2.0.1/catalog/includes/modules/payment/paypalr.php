@@ -31,7 +31,7 @@ class paypalr extends \base
 {
     use InteractsWithPlugins;
 
-    const CURRENT_VERSION = '2.0.1-beta1';
+    const CURRENT_VERSION = '2.0.1-beta2';
 
     const REDIRECT_LISTENER = HTTP_SERVER . DIR_WS_CATALOG . 'ppr_listener.php';
 
@@ -860,7 +860,9 @@ class paypalr extends \base
         //
         global $template, $current_page_base;
 
-        $is_bootstrap_template = (function_exists('zca_bootstrap_active') && zca_bootstrap_active() === true);
+        $is_bootstrap_template =
+            (function_exists('is_bootstrap_template') && is_bootstrap_template() === true)
+            || (function_exists('zca_bootstrap_active') && zca_bootstrap_active() === true);
         $css_file = ($is_bootstrap_template === true) ? 'paypalr_bootstrap.css' : 'paypalr.css';
         $css_file_name = $template->get_template_dir("^$css_file", DIR_WS_TEMPLATE, $current_page_base, 'css') . '/' . $css_file;
         if (!file_exists($css_file_name)) {
