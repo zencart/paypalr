@@ -7,7 +7,7 @@
  * @license https://www.zen-cart.com/license/2_0.txt GNU Public License V2.0
  * @version $Id: lat9 2026 Mar 17 New in v2.2.1 $
  *
- * Last updated: v2.0.0
+ * Last updated: v2.1.0
  */
 namespace PayPalRestful\Zc2Pp;
 
@@ -39,7 +39,7 @@ class ConfirmPayPalPaymentChoiceRequest
         // The brand-name supplied to PayPal (appears on PayPal-sent invoices to the
         // customer) is either the configured value or the store's defined name.
         //
-        $brand_name = (MODULE_PAYMENT_PAYPALR_BRANDNAME !== '') ? MODULE_PAYMENT_PAYPALR_BRANDNAME : STORE_NAME;
+        $brand_name = (zen_config('MODULE_PAYMENT_PAYPALR_BRANDNAME', '') !== '') ? zen_config('MODULE_PAYMENT_PAYPALR_BRANDNAME') : zen_config('STORE_NAME', '');
 
         // -----
         // Determine the post-choice action for the customer. If we're running the 'standard' 3-page

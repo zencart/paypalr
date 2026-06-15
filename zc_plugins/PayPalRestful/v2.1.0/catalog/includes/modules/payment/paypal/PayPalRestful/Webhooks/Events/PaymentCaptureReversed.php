@@ -6,7 +6,7 @@
  * @license https://www.zen-cart.com/license/2_0.txt GNU Public License V2.0
  * @version $Id: lat9 2026 Mar 17 New in v2.2.1 $
  *
- * Last updated: v2.0.0
+ * Last updated: v2.1.0
  */
 
 namespace PayPalRestful\Webhooks\Events;
@@ -51,7 +51,7 @@ class PaymentCaptureReversed extends WebhookHandlerContract
             "Notice: REFUNDED/REVERSED. Trans ID: $txnID \n" .
             "Amount: $amount\n$summary\n";
         $admin_message = $this->data['summary'] . "\n" . $this->data['note_to_payer'];
-        $status = (int)MODULE_PAYMENT_PAYPALR_REFUNDED_STATUS_ID;
+        $status = (int)zen_config('MODULE_PAYMENT_PAYPALR_REFUNDED_STATUS_ID');
         $status = ($status > 0) ? $status : 1;
 
         // Save update and notify customer

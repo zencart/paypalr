@@ -7,7 +7,7 @@
  * @license https://www.zen-cart.com/license/2_0.txt GNU Public License V2.0
  * @version $Id: lat9 2026 Mar 17 New in v2.2.1 $
  *
- * Last updated: v1.0.0
+ * Last updated: v2.1.0
  */
 namespace PayPalRestful\Admin;
 
@@ -99,7 +99,7 @@ class DoCapture
             $capture_status = -1;
         } else {
             $capture_admin_message = MODULE_PAYMENT_PAYPALR_FINAL_CAPTURE;
-            $capture_status = (int)MODULE_PAYMENT_PAYPALR_ORDER_STATUS_ID;
+            $capture_status = (int)zen_config('MODULE_PAYMENT_PAYPALR_ORDER_STATUS_ID');
             $capture_status = ($capture_status > 0) ? $capture_status : 2;
         }
         zen_update_orders_history($oID, $comments, null, $capture_status, 0);

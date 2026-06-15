@@ -6,7 +6,7 @@
  * @license https://www.zen-cart.com/license/2_0.txt GNU Public License V2.0
  * @version $Id: lat9 2026 Mar 17 New in v2.2.1 $
  *
- * Last updated: v2.0.0
+ * Last updated: v2.1.0
  */
 namespace PayPalRestful\Zc2Pp;
 
@@ -94,12 +94,12 @@ class Amount
             $default_currency = $currency_code;
         } else {
             $this->log->write("Amount::setDefaultCurrency, requested default ($currency_code) not found, trying backups");
-            if (in_array(DEFAULT_CURRENCY, $this->getSupportedCurrencyCodes())) {
-                $this->log->write('  --> Using store default currency (' . DEFAULT_CURRENCY . ')');
-                $default_currency = DEFAULT_CURRENCY;
+            if (in_array(zen_config('DEFAULT_CURRENCY'), $this->getSupportedCurrencyCodes())) {
+                $this->log->write('  --> Using store default currency (' . zen_config('DEFAULT_CURRENCY') . ')');
+                $default_currency = zen_config('DEFAULT_CURRENCY');
             } else {
-                $this->log->write('  --> Using configured back-up currency (' . MODULE_PAYMENT_PAYPALR_CURRENCY_FALLBACK . ')');
-                $default_currency = MODULE_PAYMENT_PAYPALR_CURRENCY_FALLBACK;
+                $this->log->write('  --> Using configured back-up currency (' . zen_config('MODULE_PAYMENT_PAYPALR_CURRENCY_FALLBACK') . ')');
+                $default_currency = zen_config('MODULE_PAYMENT_PAYPALR_CURRENCY_FALLBACK');
             }
         }
 

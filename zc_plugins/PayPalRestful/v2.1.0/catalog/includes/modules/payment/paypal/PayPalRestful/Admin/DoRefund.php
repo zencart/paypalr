@@ -7,7 +7,7 @@
  * @license https://www.zen-cart.com/license/2_0.txt GNU Public License V2.0
  * @version $Id: lat9 2026 Mar 17 New in v2.2.1 $
  *
- * Last updated: v1.2.0
+ * Last updated: v2.1.0
  */
 namespace PayPalRestful\Admin;
 
@@ -102,7 +102,7 @@ class DoRefund
             $total_amount_refunded += $next_txn['mc_gross'];
         }
         if ($amount->getValueFromFloat((float)$total_amount_refunded) === $amount->getValueFromFloat((float)$total_amount_captured)) {
-            $refund_status = (int)MODULE_PAYMENT_PAYPALR_REFUNDED_STATUS_ID;
+            $refund_status = (int)zen_config('MODULE_PAYMENT_PAYPALR_REFUNDED_STATUS_ID');
             $refund_status = ($refund_status > 0) ? $refund_status : 1;
         }
 

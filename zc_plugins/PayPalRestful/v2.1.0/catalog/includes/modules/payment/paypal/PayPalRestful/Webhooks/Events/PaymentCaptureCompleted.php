@@ -6,7 +6,7 @@
  * @license https://www.zen-cart.com/license/2_0.txt GNU Public License V2.0
  * @version $Id: lat9 2026 Mar 17 New in v2.2.1 $
  *
- * Last updated: v2.0.0
+ * Last updated: v2.1.0
  */
 
 namespace PayPalRestful\Webhooks\Events;
@@ -69,7 +69,7 @@ class PaymentCaptureCompleted extends WebhookHandlerContract
             $status = -1;
         } else {
             $admin_message = MODULE_PAYMENT_PAYPALR_FINAL_CAPTURE;
-            $status = (int)MODULE_PAYMENT_PAYPALR_ORDER_STATUS_ID;
+            $status = (int)zen_config('MODULE_PAYMENT_PAYPALR_ORDER_STATUS_ID');
             $status = ($status > 0) ? $status : 2;
         }
 

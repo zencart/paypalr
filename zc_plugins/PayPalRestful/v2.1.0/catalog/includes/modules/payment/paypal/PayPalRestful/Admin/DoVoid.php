@@ -7,7 +7,7 @@
  * @license https://www.zen-cart.com/license/2_0.txt GNU Public License V2.0
  * @version $Id: lat9 2026 Mar 17 New in v2.2.1 $
  *
- * Last updated: v1.0.2
+ * Last updated: v2.1.0
  */
 namespace PayPalRestful\Admin;
 
@@ -84,7 +84,7 @@ class DoVoid
         if (count($captured_txns) !== 0) {
             $voided_status = -1;
         } else {
-            $voided_status = (int)MODULE_PAYMENT_PAYPALR_VOIDED_STATUS_ID;
+            $voided_status = (int)zen_config('MODULE_PAYMENT_PAYPALR_VOIDED_STATUS_ID');
             $voided_status = ($voided_status > 0) ? $voided_status : 1;
         }
 

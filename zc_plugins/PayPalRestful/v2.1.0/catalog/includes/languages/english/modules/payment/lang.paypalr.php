@@ -2,7 +2,7 @@
 /**
  * Language definitions for the paypalr (PayPal Restful Api) payment module.
  *
- * Last updated: v2.0.0
+ * Last updated: v2.1.0
  */
 $define = [
     'MODULE_PAYMENT_PAYPALR_TEXT_TITLE' => 'PayPal Checkout',
@@ -45,8 +45,8 @@ $define = [
     // -----
     // Used by the payment module's javascript_validation method.
     //
-    'MODULE_PAYMENT_PAYPALR_TEXT_JS_CC_OWNER' => '* The cardholder\'s name must be at least ' . CC_OWNER_MIN_LENGTH . ' characters.\n',
-    'MODULE_PAYMENT_PAYPALR_TEXT_JS_CC_NUMBER' => '* The Credit Card Number must be at least ' . CC_NUMBER_MIN_LENGTH . ' characters.\n',
+    'MODULE_PAYMENT_PAYPALR_TEXT_JS_CC_OWNER' => '* The cardholder\'s name must be at least ' . zen_config('CC_OWNER_MIN_LENGTH') . ' characters.\n',
+    'MODULE_PAYMENT_PAYPALR_TEXT_JS_CC_NUMBER' => '* The Credit Card Number must be at least ' . zen_config('CC_NUMBER_MIN_LENGTH') . ' characters.\n',
     'MODULE_PAYMENT_PAYPALR_TEXT_JS_CC_CVV' => '* The 3 or 4 digit CVV Number must be entered from the back of the credit card (or front for American Express).\n',
 
     // -----

@@ -6,7 +6,7 @@
  * @license https://www.zen-cart.com/license/2_0.txt GNU Public License V2.0
  * @version $Id: lat9 2026 Mar 17 New in v2.2.1 $
  *
- * Last updated: v2.0.0
+ * Last updated: v2.1.0
  */
 
 namespace PayPalRestful\Webhooks\Events;
@@ -55,7 +55,7 @@ class PaymentAuthorizationVoided extends WebhookHandlerContract
             "Notice: VOIDED. Trans ID: $txnID \n" .
             "Amount: $amount\n$summary\n";
 
-        $status = (int)MODULE_PAYMENT_PAYPALR_VOIDED_STATUS_ID;
+        $status = (int)zen_config('MODULE_PAYMENT_PAYPALR_VOIDED_STATUS_ID');
         $status = ($status > 0) ? $status : 1;
 
         // Save update without notifying customer

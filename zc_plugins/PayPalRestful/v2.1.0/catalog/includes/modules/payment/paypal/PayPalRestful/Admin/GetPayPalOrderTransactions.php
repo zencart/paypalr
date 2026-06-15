@@ -6,8 +6,9 @@
  * @copyright Copyright 2003-2026 Zen Cart Development Team
  * @license https://www.zen-cart.com/license/2_0.txt GNU Public License V2.0
  *
- * Last updated: v1.3.0
+ * Last updated: v2.1.0
  */
+
 namespace PayPalRestful\Admin;
 
 use PayPalRestful\Admin\Formatters\Messages;
@@ -227,7 +228,7 @@ class GetPayPalOrderTransactions
     {
         foreach ($authorizations as $next_authorization) {
             $authorization_txn_id = $next_authorization['id'];
-            $first_auth_txn_id = $first_auth_txn_id ?? $authorization_txn_id;
+            $first_auth_txn_id ??= $authorization_txn_id;
             if ($this->transactionExists($authorization_txn_id) === true) {
                 continue;
             }
