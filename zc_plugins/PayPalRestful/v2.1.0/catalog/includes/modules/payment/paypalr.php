@@ -1324,7 +1324,7 @@ class paypalr extends \base
         return [
             'title' => '',
             'fields' => [
-                ['title' => MODULE_PAYMENT_PAYPALR_CC_OWNER, 'field' => '&nbsp;' . $_POST['paypalr_cc_owner']],
+                ['title' => MODULE_PAYMENT_PAYPALR_CC_OWNER, 'field' => '&nbsp;' . zen_output_string_protected($_POST['paypalr_cc_owner'])],
                 ['title' => MODULE_PAYMENT_PAYPALR_CC_TYPE, 'field' => '&nbsp;' . $this->ccInfo['type']],
                 ['title' => MODULE_PAYMENT_PAYPALR_CC_NUMBER, 'field' => '&nbsp;' . $this->obfuscateCcNumber($_POST['paypalr_cc_number'])],
                 [
