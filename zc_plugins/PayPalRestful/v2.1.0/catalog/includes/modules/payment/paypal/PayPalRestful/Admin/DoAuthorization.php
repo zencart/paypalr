@@ -77,8 +77,8 @@ class DoAuthorization
         //
         $db->Execute(
             "UPDATE " . TABLE_PAYPAL . "
-                SET parent_txn_id = '" . $_POST['auth_txn_id'] . "'
-              WHERE txn_id = '" . $auth_response['id'] . "'
+                SET parent_txn_id = '" . zen_db_input($_POST['auth_txn_id']) . "'
+              WHERE txn_id = '" . zen_db_input($auth_response['id']) . "'
               LIMIT 1"
         );
 
