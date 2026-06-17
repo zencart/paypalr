@@ -7,7 +7,7 @@
  * @license https://www.zen-cart.com/license/2_0.txt GNU Public License V2.0
  * @version $Id: lat9 2026 Mar 17 New in v2.2.1 $
  *
- * Last updated: v2.0.0
+ * Last updated: v2.1.0
  */
 namespace PayPalRestful\Admin\Formatters;
 
@@ -231,6 +231,7 @@ class MainDisplay
                 }
 
                 $align_class = (isset($next_field['align'])) ? " text-{$next_field['align']}" : '';
+                $value = zen_output_string_protected($value);
                 $data .=
                     "  <td class=\"dataTableContent$align_class\">$value</td>\n";
             }
