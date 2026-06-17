@@ -49,7 +49,7 @@ class DoRefund
 
         $capture_currency = $capture_id_txn['mc_currency'];
 
-        $payer_note = $_POST['ppr-refund-note'];
+        $payer_note = strip_tags($_POST['ppr-refund-note']);
         $invoice_id = $ppr_txns->getInvoiceId();
 
         $full_refund = isset($_POST['ppr-refund-full']);
