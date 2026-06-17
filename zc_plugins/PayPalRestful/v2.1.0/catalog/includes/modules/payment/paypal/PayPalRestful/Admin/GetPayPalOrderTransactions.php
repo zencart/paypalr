@@ -381,7 +381,7 @@ class GetPayPalOrderTransactions
             'notify_version' => $this->moduleVersion,
             'last_modified' => Helpers::convertPayPalDatePay2Db($paypal_response['update_time']),
         ];
-        zen_db_perform(TABLE_PAYPAL, $sql_data_array, 'update', "order_id={$this->oID} AND txn_id = '$parent_txn_id' LIMIT 1");
+        zen_db_perform(TABLE_PAYPAL, $sql_data_array, 'update', "order_id={$this->oID} AND txn_id = '" . zen_db_input($parent_txn_id) . "' LIMIT 1");
     }
 
     protected function getPaymentInfo(array $paypal_response): array
