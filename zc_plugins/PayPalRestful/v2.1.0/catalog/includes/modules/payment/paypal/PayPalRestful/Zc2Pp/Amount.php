@@ -105,8 +105,8 @@ class Amount
 
         self::$defaultCurrencyCode = [
             'code' => $default_currency,
-            'no_decimals' => isset(self::$defaultCurrencyCode[$default_currency]['no_decimals']),
-            'in_country_only' => isset(self::$defaultCurrencyCode[$default_currency]['in_country_only']),
+            'no_decimals' => isset(self::$supportedCurrencyCodes[$default_currency]['no_decimals']),
+            'in_country_only' => isset(self::$supportedCurrencyCodes[$default_currency]['in_country_only']),
         ];
 
         $this->amount['currency_code'] = $default_currency;
