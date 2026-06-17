@@ -824,7 +824,7 @@ class MainDisplay
                         break;
 
                     // -----
-                    // Capture any exchange_rate, since refunds are not converted in the
+                    // Capture any exchange_rate, since refunds are not converted in
                     // the site's settlement currency.
                     //
                     case 'exchange_rate':
