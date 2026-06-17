@@ -1514,6 +1514,40 @@ class paypalr extends \base
             $this->log->write("==> paypalr::before_process ($payment_source): Payment status {$payment['status']} received from PayPal; order's status forced to pending.");
         }
 
+        // -----
+        // Defense-in-depth: confirm that the amount PayPal captured/authorized matches the
+        // order total about to be recorded. For the 'paypal' wallet payment-source the funds
+        // were captured against an order created earlier (during pre_confirmation_check), so a
+        // mismatch here means the order total changed after PayPal approval (e.g. a cart change
+        // that slipped past the GUID/cart-hash guards). The expected value is computed exactly
+        // as CreatePayPalOrderRequest builds the order amount, so a normal checkout (and every
+        // 'card' payment, which is created and captured in this same request) always matches.
+        // Rather than silently recording an under/over-paid order as complete, hold it for
+        // review and force-send an alert to the store owner.
+        //
+        global $currencies;
+        if (!isset($currencies)) {
+            $currencies = new currencies();
+        }
+        $ppr_amount = new Amount($order->info['currency']);
+        $paypal_currency = $ppr_amount->getDefaultCurrencyCode();
+        $expected_value = $ppr_amount->getValueFromFloat((float)$currencies->rateAdjusted($order_info['total'], true, $paypal_currency));
+        $captured_value = $payment['amount']['value'] ?? '';
+        $captured_currency = $payment['amount']['currency_code'] ?? '';
+        if ($captured_value !== $expected_value || $captured_currency !== $paypal_currency) {
+            $this->order_status = (int)zen_config('MODULE_PAYMENT_PAYPALR_ORDER_PENDING_STATUS_ID');
+            $order->info['order_status'] = $this->order_status;
+            $this->orderInfo['admin_alert_needed'] = true;
+
+            $mismatch_details = "PayPal order {$this->orderInfo['id']}: captured $captured_value $captured_currency vs. expected $expected_value $paypal_currency (order total {$order_info['total']} {$order->info['currency']}).";
+            $this->log->write("==> paypalr::before_process ($payment_source): AMOUNT MISMATCH; order forced to pending. $mismatch_details");
+            $this->sendAlertEmail(
+                MODULE_PAYMENT_PAYPALR_ALERT_SUBJECT_TOTAL_MISMATCH,
+                MODULE_PAYMENT_PAYPALR_ALERT_TOTAL_MISMATCH . "\n\n" . $mismatch_details,
+                true
+            );
+        }
+
         $this->notify('NOTIFY_PAYPALR_BEFORE_PROCESS_FINISHED', $this->orderInfo);
     }
     protected function captureOrAuthorizePayment(string $payment_source): array
