@@ -163,6 +163,16 @@ class CreatePayPalOrderRequest extends ErrorInfo
     protected function validateOrderAmounts(): void
     {
         $purchase_amount = $this->request['purchase_units'][0]['amount'];
+
+        // -----
+        // No breakdown was built (e.g. a virtual-only order, or an item list that couldn't be
+        // itemized), so there's nothing to reconcile against the order total.
+        // Bail out here to avoid iterating a missing key and falsely flagging a breakdown-mismatch.
+        //
+        if (empty($purchase_amount['breakdown'])) {
+            return;
+        }
+
         $summed_amount = 0;
         foreach ($purchase_amount['breakdown'] as $name => $amount) {
             if ($name === 'discount') {
