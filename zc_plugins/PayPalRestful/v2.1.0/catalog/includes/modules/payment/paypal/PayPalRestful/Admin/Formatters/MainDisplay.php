@@ -175,7 +175,7 @@ class MainDisplay
                     //
                     case 'txn_id':
                         $value =
-                            ((empty($next_txn['parent_txn_id'])) ? '&mdash;' : $next_txn['parent_txn_id']) .
+                            ((empty($next_txn['parent_txn_id'])) ? '&mdash;' : zen_output_string_protected($next_txn['parent_txn_id'])) .
                             '<br>' .
                             $value;
                         break;
@@ -185,18 +185,18 @@ class MainDisplay
                     // email-address and payer-id in a single column.
                     //
                     case 'payer_email':
-                        $first_name = $next_txn['first_name'];
-                        $last_name = $next_txn['last_name'];
+                        $first_name = zen_output_string_protected($next_txn['first_name']);
+                        $last_name = zen_output_string_protected($next_txn['last_name']);
                         $payment_type = $next_txn['payment_type'];
-                        $payer_email = $value;
-                        if (($first_name . $last_name) !== '') {
+                        $payer_email = zen_output_string_protected($value);
+                        if (($next_txn['first_name'] . $next_txn['last_name']) !== '') {
                             $value = $first_name . ' ' . $last_name;
                             if ($payment_type === 'paypal') {
-                                $value .= ' (' . $next_txn['payer_status'] . ')<br>' . $payer_email;
+                                $value .= ' (' . zen_output_string_protected($next_txn['payer_status']) . ')<br>' . $payer_email;
                             }
                         }
                         if ($payment_type === 'paypal') {
-                            $value .= '<br>' . $next_txn['payer_id'];
+                            $value .= '<br>' . zen_output_string_protected($next_txn['payer_id']);
                         }
                         break;
 
@@ -206,7 +206,7 @@ class MainDisplay
                     //
                     case 'payment_status':
                         if ($next_txn['pending_reason'] !== null) {
-                            $value .= '<br><small>' . $next_txn['pending_reason'] . '</small>';
+                            $value .= '<br><small>' . zen_output_string_protected($next_txn['pending_reason']) . '</small>';
                         }
                         break;
 
@@ -231,7 +231,6 @@ class MainDisplay
                 }
 
                 $align_class = (isset($next_field['align'])) ? " text-{$next_field['align']}" : '';
-                $value = zen_output_string_protected($value);
                 $data .=
                     "  <td class=\"dataTableContent$align_class\">$value</td>\n";
             }
@@ -812,6 +811,7 @@ class MainDisplay
                 // -----
                 // Calculations for the current PayPal settled amounts.
                 //
+                $value = zen_output_string_protected((string)($value ?? ''));
                 switch ($next_field['field']) {
                     // -----
                     // Special case for 'payment_status' field, it's followed by its "pending_reason",
@@ -819,7 +819,7 @@ class MainDisplay
                     //
                     case 'payment_status':
                         if ($next_txn['pending_reason'] !== null) {
-                            $value .= '<br><small>' . $next_txn['pending_reason'] . '</small>';
+                            $value .= '<br><small>' . zen_output_string_protected($next_txn['pending_reason']) . '</small>';
                         }
                         break;
 
