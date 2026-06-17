@@ -7,7 +7,7 @@
  *
  * @copyright Copyright 2003-2026 Zen Cart Development Team
  * @license https://www.zen-cart.com/license/2_0.txt GNU Public License V2.0
- * @version $Id: lat9 2026 Mar 17 New in v2.2.1 $
+ * @version $Id: DrByte 2026-06-16  Modified in ZC v2.2.3 $
  *
  * Last updated: v2.1.0
  */
@@ -18,9 +18,12 @@ use PayPalRestful\Api\PayPalRestfulApi;
 
 class WebhookResponder
 {
+    // Certificate URLs must be HTTPS and hosted on paypal.com (covers api.paypal.com, api.sandbox.paypal.com, etc.)
+    private const PAYPAL_CERT_HOST_SUFFIX = '.paypal.com';
+
     protected bool $shouldRespond = false;
 
-    protected null|string $webhook_listener_subscribe_id = null;
+    protected ?string $webhook_listener_subscribe_id = null;
 
     public function __construct(protected WebhookObject $webhook)
     {
@@ -46,7 +49,7 @@ class WebhookResponder
         return $this->shouldRespond;
     }
 
-    public function verify(): null|bool
+    public function verify(): ?bool
     {
         if ($this->shouldRespond !== true) {
             return null;
@@ -55,9 +58,18 @@ class WebhookResponder
         $valid = $this->doCrcCheck();
 
         // Null means we couldn't complete a CRC check (ie: internal issue, not "failed validation"),
-        // So this falls through to trying a postback instead
+        // so this falls through to trying a postback instead.
+        // If validateCertUrl() returns false, we will abort.
         if ($valid === null) {
-            $valid = $this->verifyByPostback();
+            $headers = array_change_key_case($this->webhook->getHeaders(), CASE_UPPER);
+            if (!isset($headers['PAYPAL-TRANSMISSION-ID'], $headers['PAYPAL-TRANSMISSION-TIME'], $headers['PAYPAL-TRANSMISSION-SIG'], $headers['PAYPAL-CERT-URL'])) {
+                return null; // required headers missing; cannot attempt postback either
+            }
+            $certUrl = trim($headers['PAYPAL-CERT-URL']);
+            if (!$this->validateCertUrl($certUrl)) {
+                return false;
+            }
+            $valid = $this->verifyByPostback($certUrl);
         }
 
         // null means "we" (internally) couldn't complete a verification attempt (and we *will* want PayPal to see it as failed-to-complete, so they keep re-sending)
@@ -74,7 +86,7 @@ class WebhookResponder
     /**
      * @return bool|null  returns null if we cannot do CRC check, so fails over to PostBack approach
      */
-    protected function doCrcCheck(): bool|null
+    protected function doCrcCheck(): ?bool
     {
         $headers = array_change_key_case($this->webhook->getHeaders(), CASE_UPPER);
 
@@ -94,7 +106,13 @@ class WebhookResponder
         $transmissionSignature = $headers['PAYPAL-TRANSMISSION-SIG'];
         $decodedSignature = base64_decode($transmissionSignature);
 
-        $publicKeyUrl = $headers['PAYPAL-CERT-URL'];
+        $publicKeyUrl = trim($headers['PAYPAL-CERT-URL']);
+
+        // Return null (not false) so verify()'s cert-URL gate decides the outcome,
+        // keeping both rejection paths through the same exit point.
+        if (!$this->validateCertUrl($publicKeyUrl)) {
+            return null;
+        }
 
         // @TODO - consider download and cache the public key, from the URL, instead of retrieving fresh in real time
         $pem_cert = $this->read_url($publicKeyUrl);
@@ -121,13 +139,16 @@ class WebhookResponder
     /**
      * @return bool|null  returns null if unable to use CURL or if the access token is invalid.
      */
-    protected function verifyByPostback(): null|bool
+    protected function verifyByPostback(string $certUrl): ?bool
     {
         $headers = array_change_key_case($this->webhook->getHeaders(), CASE_UPPER);
+        if (!isset($headers['PAYPAL-TRANSMISSION-ID'], $headers['PAYPAL-TRANSMISSION-TIME'], $headers['PAYPAL-TRANSMISSION-SIG'])) {
+            return null; // required headers absent; cannot build a valid postback payload
+        }
         $params_array = [
             'transmission_id' => $headers['PAYPAL-TRANSMISSION-ID'],
             'transmission_time' => $headers['PAYPAL-TRANSMISSION-TIME'],
-            'cert_url' => $headers['PAYPAL-CERT-URL'],
+            'cert_url' => $certUrl,
             'auth_algo' => 'SHA256withRSA',
             'transmission_sig' => $headers['PAYPAL-TRANSMISSION-SIG'],
             'webhook_id' => $this->webhook_listener_subscribe_id,
@@ -160,28 +181,51 @@ class WebhookResponder
     }
 
     /**
-     * Read the cert via URL using file_get_contents or curl as fallback
-     *
-     * @param string $url
-     * @return bool|string
+     * Verify that a cert URL is safe to fetch: must be HTTPS and hosted on paypal.com.
+     * Called before read_url() to prevent SSRF and attacker-supplied cert substitution.
+     */
+    protected function validateCertUrl(string $url): bool
+    {
+        $parsed = parse_url($url);
+        if ($parsed === false || strtolower($parsed['scheme'] ?? '') !== 'https') {
+            return false;
+        }
+        // Normalize: lowercase and strip optional trailing FQDN dot ("api.paypal.com." is valid DNS)
+        $host = strtolower(rtrim($parsed['host'] ?? '', '.'));
+        // Accept paypal.com and any subdomain — covers api.paypal.com, api.sandbox.paypal.com, etc.
+        return $host === 'paypal.com' || \str_ends_with($host, self::PAYPAL_CERT_HOST_SUFFIX);
+    }
+
+    /**
+     * Read the cert via URL using file_get_contents or curl as fallback.
+     * The URL must already have been validated by validateCertUrl() before calling this.
      */
     protected function read_url(string $url): string|bool
     {
         // Try file_get_contents first
+        $result = false;
         if (ini_get('allow_url_fopen')) {
-            $result = file_get_contents($url);
+            $context = stream_context_create([
+                'http' => ['follow_location' => 0, 'timeout' => 10],
+            ]);
+            $result = file_get_contents($url, false, $context);
         }
-        if (!empty($result)) {
+        if ($result !== false && $result !== '') {
             return $result;
         }
-        // Fallback to curl
+        // Fallback to curl — redirects disabled so a paypal.com 3xx cannot bounce to an internal host
         $ch = curl_init($url);
+        if ($ch === false) {
+            return false;
+        }
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_TIMEOUT => 10,
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_TIMEOUT        => 10,
             CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_USERAGENT => 'ZCPP WebhookResponder/1.0',
+            CURLOPT_USERAGENT      => 'ZCPP WebhookResponder/1.0',
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
         ]);
         return curl_exec($ch);
     }
