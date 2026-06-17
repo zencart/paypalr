@@ -185,7 +185,7 @@ class GetPayPalOrderTransactions
         if ($txns === false) {
             $error_info = $this->ppr->getErrorInfo();
             if ($error_info['name'] !== 'RESOURCE_NOT_FOUND') {
-                $this->messages->add(MODULE_PAYMENT_PAYPALR_TEXT_GETDETAILS_ERROR . "\n" . Logger::logJSON($error_info), 'error');
+                $this->messages->add(MODULE_PAYMENT_PAYPALR_TEXT_GETDETAILS_ERROR . "\n" . zen_output_string_protected(Logger::logJSON($error_info)), 'error');
             }
             return;
         }
@@ -218,7 +218,7 @@ class GetPayPalOrderTransactions
                     $this->updateRefunds($child_txns, $captures);
                     break;
                 default:
-                    $this->messages->add("Unknown payment record ($record_type) provided by PayPal.\n" . Logger::logJSON($child_txns, true), 'error');
+                    $this->messages->add('Unknown payment record (' . zen_output_string_protected($record_type) . ") provided by PayPal.\n" . zen_output_string_protected(Logger::logJSON($child_txns, true)), 'error');
                     break;
             }
         }
