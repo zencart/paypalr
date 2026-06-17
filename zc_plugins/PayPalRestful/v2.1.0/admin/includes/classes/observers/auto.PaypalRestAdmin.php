@@ -76,7 +76,7 @@ class zcObserverPaypalRestAdmin
                 continue;
             }
             // Add the tracking number to the PayPal transaction.
-            $carrier_name = defined("CARRIER_NAME_$i") && !empty("CARRIER_NAME_$i") ? constant("CARRIER_NAME_$i") : 'OTHER';
+            $carrier_name = defined("CARRIER_NAME_$i") && !empty(constant("CARRIER_NAME_$i")) ? constant("CARRIER_NAME_$i") : 'OTHER';
             $result = $ppr->updatePackageTracking($paypal['txn_id'], $tracking_number, $carrier_name, 'ADD');
         }
 
