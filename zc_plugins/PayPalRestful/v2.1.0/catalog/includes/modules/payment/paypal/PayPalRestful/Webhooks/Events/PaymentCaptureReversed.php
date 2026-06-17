@@ -50,7 +50,7 @@ class PaymentCaptureReversed extends WebhookHandlerContract
         $comments =
             "Notice: REFUNDED/REVERSED. Trans ID: $txnID \n" .
             "Amount: $amount\n$summary\n";
-        $admin_message = $this->data['summary'] . "\n" . $this->data['note_to_payer'];
+        $admin_message = $this->data['summary'] . "\n" . ($this->data['resource']['note_to_payer'] ?? '');
         $status = (int)zen_config('MODULE_PAYMENT_PAYPALR_REFUNDED_STATUS_ID');
         $status = ($status > 0) ? $status : 1;
 
