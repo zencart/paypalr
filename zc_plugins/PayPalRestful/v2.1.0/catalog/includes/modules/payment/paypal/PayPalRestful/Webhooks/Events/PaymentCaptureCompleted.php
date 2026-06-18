@@ -22,6 +22,8 @@ class PaymentCaptureCompleted extends WebhookHandlerContract
 
     public function action(): void
     {
+        global $zco_notifier;
+
         // A payment capture completes
         // https://developer.paypal.com/docs/api/payments/v2/#authorizations_capture - with response `status` of `completed`
 
@@ -73,7 +75,25 @@ class PaymentCaptureCompleted extends WebhookHandlerContract
         $ppr_txns->syncPaypalTxns();
 
         if ($already_completed === true) {
-            $this->log->write("PAYMENT.CAPTURE.COMPLETED - capture $txnID for order $oID was already recorded as COMPLETED; skipping duplicate status-history, merchant email and NOTIFY_PAYPALR_FUNDS_CAPTURED.");
+            // -----
+            // The status-history rows and merchant alert email were already written by
+            // whichever code path first recorded this capture as COMPLETED, so skip them.
+            //
+            // However, the two capture paths fire *different* notifiers:
+            //   - Checkout before_process() fires NOTIFY_PAYPALR_FUNDS_CAPTURED (paypalr.php:2053).
+            //   - Admin DoCapture fires only NOTIFY_PAYPALR_ADMIN_FUNDS_IN_OUT via addDbTransaction().
+            //
+            // For admin-initiated captures the webhook is therefore the only opportunity to
+            // fire NOTIFY_PAYPALR_FUNDS_CAPTURED.  Detect the admin path by the presence of an
+            // AUTHORIZE row: immediate checkout sales are a single create+capture transaction
+            // (no AUTHORIZE row); deferred admin captures always follow a prior authorization.
+            //
+            if ($this->orderWasDeferredCapture((int)$oID)) {
+                $this->log->write("PAYMENT.CAPTURE.COMPLETED - capture $txnID for order $oID was admin-initiated; status-history/email already written, firing NOTIFY_PAYPALR_FUNDS_CAPTURED.");
+                $zco_notifier->notify('NOTIFY_PAYPALR_FUNDS_CAPTURED', ['webhook' => $this->data]);
+            } else {
+                $this->log->write("PAYMENT.CAPTURE.COMPLETED - capture $txnID for order $oID was already fully processed by checkout; skipping duplicate status-history, merchant email and NOTIFY_PAYPALR_FUNDS_CAPTURED.");
+            }
             return;
         }
 
@@ -109,7 +129,6 @@ class PaymentCaptureCompleted extends WebhookHandlerContract
         // funds-captured notification is being raised for it.  Fire it so that sites
         // which manage payments are aware of the incoming funds.
         //
-        global $zco_notifier;
         $zco_notifier->notify('NOTIFY_PAYPALR_FUNDS_CAPTURED', ['webhook' => $this->data]);
     }
 
@@ -138,6 +157,31 @@ class PaymentCaptureCompleted extends WebhookHandlerContract
                 AND txn_id = '" . $txn_id . "'
                 AND txn_type = 'CAPTURE'
                 AND payment_status = 'COMPLETED'
+              LIMIT 1"
+        );
+        return !$check->EOF;
+    }
+
+    /**
+     * Determine whether this order went through an authorize-then-capture flow
+     * (as opposed to an immediate checkout capture).
+     *
+     * Immediate checkout sales are a single create+capture transaction: no AUTHORIZE
+     * row is written and NOTIFY_PAYPALR_FUNDS_CAPTURED is fired by before_process().
+     *
+     * Admin DoCapture always follows a prior authorization, so an AUTHORIZE row exists
+     * and only NOTIFY_PAYPALR_ADMIN_FUNDS_IN_OUT is fired — making the webhook the
+     * only opportunity to fire NOTIFY_PAYPALR_FUNDS_CAPTURED for that path.
+     */
+    protected function orderWasDeferredCapture(int $oID): bool
+    {
+        global $db;
+
+        $check = $db->ExecuteNoCache(
+            "SELECT txn_id
+               FROM " . TABLE_PAYPAL . "
+              WHERE order_id = " . $oID . "
+                AND txn_type = 'AUTHORIZE'
               LIMIT 1"
         );
         return !$check->EOF;
