@@ -116,6 +116,8 @@ class PayPalRestfulApi extends ErrorInfo
         CURLOPT_FRESH_CONNECT => true,
         CURLOPT_HEADER => 0,
         CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_SSL_VERIFYHOST => 2,
         CURLOPT_TIMEOUT => 45,
     ];
 
