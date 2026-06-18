@@ -133,11 +133,24 @@ class WebhookController
     }
 
     /**
-     * Save webhook records to database for subsequent querying
+     * Save webhook records to database for subsequent querying.
+     *
+     * The raw webhook body is NOT stored verbatim — it may contain payer PII
+     * (name, email, address) from PAYMENT.CAPTURE.COMPLETED and similar events.
+     * Logger::logJSON() redacts all PII keys before the body reaches the DB so
+     * the table does not become an unbounded store of personal data.
      */
     protected function saveToDatabase(string $user_agent, string $request_method, string $request_body, array $request_headers): void
     {
         $json_body = json_decode($request_body, true);
+
+        // -----
+        // Redact PII from the stored body.  logJSON() recursively masks payer
+        // name/email/phone/address keys and suppresses credential fields; we
+        // pass keep_links=true so the full event structure is preserved for
+        // debugging while sensitive leaf values are replaced with **redacted**.
+        //
+        $redacted_body = Logger::logJSON(is_array($json_body) ? $json_body : [], true);
 
         $sql_data_array = [
             'webhook_id' => substr($json_body['id'] ?? '(webhook id not determined)', 0, 64),
@@ -145,7 +158,7 @@ class WebhookController
             'user_agent' => substr($user_agent, 0, 192),
             'request_method' => substr($request_method, 0, 32),
             'request_headers' => \json_encode($request_headers ?? []),
-            'body' => $request_body,
+            'body' => $redacted_body,
         ];
 
         // ensure table exists

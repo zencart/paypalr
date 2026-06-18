@@ -65,7 +65,7 @@ class Logger
     // -----
     // Format pretty-printed JSON for the debug-log, removing any HTTP Header
     // information (present in the CURL options) and/or the actual access-token as well
-    // as obfuscating any credit-card information in the data supplied.
+    // as obfuscating any credit-card information and PII in the data supplied.
     //
     // Also remove unneeded return values that will just 'clutter up' the logged information,
     // unless requested to keep them.
@@ -80,12 +80,30 @@ class Logger
                 $data['app_id'],
                 $data['nonce']
             );
-            if (isset($data['payment_source']['card']['number'])) {
-                $data['payment_source']['card']['number'] = substr($data['payment_source']['card']['number'], -4);
+
+            // -----
+            // CURLOPT_POSTFIELDS carries the JSON-encoded request body for card orders
+            // (full PAN, CVV, billing address). Decode, redact, re-encode so the log
+            // captures request shape without sensitive content.  The live curl options
+            // array is never modified — this operates only on the local copy used for
+            // logging (issueRequest passes $curl_options only to these log calls after
+            // curl_exec() has already completed).
+            //
+            if (isset($data[CURLOPT_POSTFIELDS]) && is_string($data[CURLOPT_POSTFIELDS])) {
+                $decoded = json_decode($data[CURLOPT_POSTFIELDS], true);
+                if (is_array($decoded)) {
+                    $data[CURLOPT_POSTFIELDS] = json_encode(self::redactPii($decoded));
+                }
             }
-            if (isset($data['payment_source']['card']['security_code'])) {
-                $data['payment_source']['card']['security_code'] = str_repeat('*', strlen($data['payment_source']['card']['security_code']));
-            }
+
+            // -----
+            // Redact PII fields that appear in PayPal order responses and webhook
+            // bodies (payer name/email/phone/address, shipping name/address, card
+            // number/CVV).  The recursive walk covers every nesting depth so new
+            // PayPal response shapes are handled without additional case statements.
+            //
+            $data = self::redactPii($data);
+
             if ($keep_links === false) {
                 unset(
                     $data['links'],
@@ -104,6 +122,66 @@ class Logger
             }
         }
         return ($use_var_export === true) ? var_export($data, true) : json_encode($data, JSON_PRETTY_PRINT);
+    }
+
+    // -----
+    // Recursively walk an array and mask the value of any key that carries
+    // PII or payment credentials.  Keys are matched case-insensitively.
+    // Three masking tiers apply:
+    //
+    //   CVV (security_code)  — PCI-DSS 3.3.2 prohibits retaining SAD in any
+    //                          form after auth; always fully redacted.
+    //
+    //   Card PAN (number)    — PCI-DSS 3.3.1 permits first-6 + last-4;
+    //                          middle digits replaced with '#'.  Output is
+    //                          the same length as the original PAN.
+    //
+    //   PII (name/email/     — Not PCI-governed (GDPR data minimisation).
+    //   address/phone)         Output always matches the original length:
+    //                          ≥5 chars: first-2 + '*' × (len-4) + last-2
+    //                          3-4 chars: first-1 + '*' × (len-2) + last-1
+    //                          1-2 chars: left unmasked (too coarse to identify)
+    //
+    private static function redactPii(array $data): array
+    {
+        static $fullRedact   = ['security_code'];
+        static $panMask      = ['number'];
+        static $partialMask  = [
+            'given_name', 'surname', 'full_name', 'email_address', 'national_number',
+            'address_line_1', 'address_line_2', 'postal_code', 'admin_area_2',
+        ];
+        // admin_area_1 (state/province code e.g. "CA") is coarse-grained location,
+        // not personally identifying — left unmasked for debugging utility.
+
+        foreach ($data as $key => $value) {
+            if (is_array($value)) {
+                $data[$key] = self::redactPii($value);
+                continue;
+            }
+            if (!is_string($value)) {
+                continue;
+            }
+            $lkey = strtolower((string)$key);
+            if (in_array($lkey, $fullRedact, true)) {
+                $data[$key] = '**redacted**';
+            } elseif (in_array($lkey, $panMask, true)) {
+                $len = strlen($value);
+                $data[$key] = $len >= 10
+                    ? substr($value, 0, 6) . str_repeat('#', $len - 10) . substr($value, -4)
+                    : '**redacted**';
+            } elseif (in_array($lkey, $partialMask, true)) {
+                $len = strlen($value);
+                if ($len >= 5) {
+                    // first-2 + same-length stars + last-2
+                    $data[$key] = substr($value, 0, 2) . str_repeat('*', $len - 4) . substr($value, -2);
+                } elseif ($len >= 3) {
+                    // short values (e.g. 4-char city names): first-1 + stars + last-1
+                    $data[$key] = substr($value, 0, 1) . str_repeat('*', $len - 2) . substr($value, -1);
+                }
+                // 1-2 char values are too coarse-grained to need masking
+            }
+        }
+        return $data;
     }
 
     public function write(string $message, bool $include_timestamp = false, string $include_separator = ''): void
