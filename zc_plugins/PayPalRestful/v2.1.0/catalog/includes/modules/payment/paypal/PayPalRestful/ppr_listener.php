@@ -112,12 +112,19 @@ if ($op === '3ds_return') {
     $enrollment_status = $auth_result['three_d_secure']['enrollment_status'] ?? '';
 
     // -----
-    // Reject when:
-    // - no liability_shift was returned at all (missing/partial result; fail closed);
-    // - PayPal could not determine the liability shift (UNKNOWN); or
-    // - the card was enrolled in 3DS but the liability did not shift (enrolled + NO).
+    // Reject unless the result is unambiguously safe to proceed:
+    //   POSSIBLE           — issuer accepted liability; always safe.
+    //   NO + enrolled='N'  — card is not enrolled in 3DS; NO shift is expected and
+    //                        acceptable (issuer cannot do 3DS, so merchant proceeds
+    //                        knowing they hold liability).
+    // Everything else fails closed:
+    //   NO  + enrolled='Y' — enrolled card, liability did not shift; reject.
+    //   NO  + enrolled=''  — enrollment unknown/missing; cannot confirm non-enrolled
+    //                        status, so treat as risky and reject (Codex P2).
+    //   UNKNOWN            — PayPal could not determine the liability shift; reject.
+    //   ''  (missing)      — partial/absent authentication_result; reject.
     //
-    if ($liability_shift === '' || $liability_shift === 'UNKNOWN' || ($enrollment_status === 'Y' && $liability_shift === 'NO')) {
+    if (!($liability_shift === 'POSSIBLE' || ($enrollment_status === 'N' && $liability_shift === 'NO'))) {
         $logger->write("ppr_listener, 3ds_return authentication not confirmed (liability_shift: '$liability_shift', enrollment_status: '$enrollment_status'); redirecting to checkout_payment.", true, 'after');
         $messageStack->add_session('checkout_payment', MODULE_PAYMENT_PAYPALR_REDIRECT_LISTENER_TRY_AGAIN, 'error');
         unset($_SESSION['PayPalRestful']['Order']['PayerAction'], $_SESSION['PayPalRestful']['Order']['authentication_result']);
