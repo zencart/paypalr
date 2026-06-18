@@ -106,7 +106,7 @@ if ($op === '3ds_return') {
     if ($liability_shift === 'UNKNOWN' || ($enrollment_status === 'Y' && $liability_shift === 'NO')) {
         $messageStack->add_session('checkout_payment', MODULE_PAYMENT_PAYPALR_REDIRECT_LISTENER_TRY_AGAIN, 'error');
         unset($_SESSION['PayPalRestful']['Order']['PayerAction'], $_SESSION['PayPalRestful']['Order']['authentication_result']);
-        zen_redirect(zen_href_link(FILENAME_CHECKOUT_PAYMENT), '', 'SSL');
+        zen_redirect(zen_href_link(FILENAME_CHECKOUT_PAYMENT, '', 'SSL'));
     }
 }
 
