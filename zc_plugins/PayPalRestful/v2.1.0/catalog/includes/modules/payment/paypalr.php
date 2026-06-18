@@ -432,7 +432,7 @@ class paypalr extends \base
             return;
         }
 
-        global $db;
+        global $db, $sniffer;
 
         // -----
         // Check for version-specific configuration updates.
