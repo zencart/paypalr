@@ -100,10 +100,25 @@ if ($order_status === false) {
 // https://developer.paypal.com/docs/checkout/advanced/customize/3d-secure/response-parameters/
 //
 if ($op === '3ds_return') {
-    $auth_result = $order_status['payment_source']['card']['authentication_result'];
-    $liability_shift = $auth_result['liability_shift'];
-    $enrollment_status = $auth_result['three_d_secure']['enrollment_status'];
-    if ($liability_shift === 'UNKNOWN' || ($enrollment_status === 'Y' && $liability_shift === 'NO')) {
+    // -----
+    // The card's authentication_result drives whether the 3DS-verified order may
+    // proceed.  Read each element defensively: a legitimate 3ds_return always carries
+    // a populated authentication_result, so a missing/partial result means we cannot
+    // confirm the payment's authentication state and must fail *closed* — sending the
+    // customer back to try again rather than letting an unverified card order through.
+    //
+    $auth_result = $order_status['payment_source']['card']['authentication_result'] ?? [];
+    $liability_shift = $auth_result['liability_shift'] ?? '';
+    $enrollment_status = $auth_result['three_d_secure']['enrollment_status'] ?? '';
+
+    // -----
+    // Reject when:
+    // - no liability_shift was returned at all (missing/partial result; fail closed);
+    // - PayPal could not determine the liability shift (UNKNOWN); or
+    // - the card was enrolled in 3DS but the liability did not shift (enrolled + NO).
+    //
+    if ($liability_shift === '' || $liability_shift === 'UNKNOWN' || ($enrollment_status === 'Y' && $liability_shift === 'NO')) {
+        $logger->write("ppr_listener, 3ds_return authentication not confirmed (liability_shift: '$liability_shift', enrollment_status: '$enrollment_status'); redirecting to checkout_payment.", true, 'after');
         $messageStack->add_session('checkout_payment', MODULE_PAYMENT_PAYPALR_REDIRECT_LISTENER_TRY_AGAIN, 'error');
         unset($_SESSION['PayPalRestful']['Order']['PayerAction'], $_SESSION['PayPalRestful']['Order']['authentication_result']);
         zen_redirect(zen_href_link(FILENAME_CHECKOUT_PAYMENT), '', 'SSL');
