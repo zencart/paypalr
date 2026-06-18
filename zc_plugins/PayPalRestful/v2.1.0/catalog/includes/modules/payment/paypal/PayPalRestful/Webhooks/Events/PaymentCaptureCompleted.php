@@ -22,8 +22,6 @@ class PaymentCaptureCompleted extends WebhookHandlerContract
 
     public function action(): void
     {
-        global $zco_notifier;
-
         // A payment capture completes
         // https://developer.paypal.com/docs/api/payments/v2/#authorizations_capture - with response `status` of `completed`
 
@@ -52,48 +50,46 @@ class PaymentCaptureCompleted extends WebhookHandlerContract
         }
 
         // -----
-        // Idempotency guard against duplicate capture-processing.
+        // Idempotency guard for the checkout immediate-capture path only.
         //
-        // A capture can be recorded *synchronously* by the storefront checkout flow
-        // (an immediate "Final Sale") or by the admin Orders page *before* PayPal
-        // delivers this PAYMENT.CAPTURE.COMPLETED webhook.  WebhookController's
-        // webhook_id idempotency guard only suppresses re-delivery of the *same*
-        // webhook event; it cannot know that another code path already recorded the
-        // capture.  Read our pre-sync record of this capture: if it is already marked
-        // COMPLETED, the order-status-history, merchant alert email and the
-        // NOTIFY_PAYPALR_FUNDS_CAPTURED notifier were already issued, so we must not
-        // repeat them here (duplicate history rows, duplicate emails, double-counted
-        // funds).  Reading the status *before* syncPaypalTxns() is essential: the sync
-        // itself advances a still-PENDING capture to COMPLETED, and a genuine
-        // pending->completed transition must still be processed.
+        // Three pre-webhook capture paths exist, each leaving different DB state:
         //
-        $already_completed = $this->captureAlreadyCompleted((int)$oID, (string)$txnID);
+        //   1. Checkout before_process() (immediate "Final Sale"): writes status-history,
+        //      sends merchant alert email, and fires NOTIFY_PAYPALR_FUNDS_CAPTURED.
+        //      Identifiable by the absence of an AUTHORIZE row (create+capture is a
+        //      single transaction, no prior authorization step).
+        //
+        //   2. Admin DoCapture: writes status-history, sends alert email, and fires
+        //      NOTIFY_PAYPALR_ADMIN_FUNDS_IN_OUT — but NOT NOTIFY_PAYPALR_FUNDS_CAPTURED.
+        //
+        //   3. syncPaypalTxns() (admin order-view before webhook arrives): inserts the
+        //      CAPTURE row and fires NOTIFY_PAYPALR_ADMIN_FUNDS_IN_OUT only — no
+        //      status-history and no merchant alert email.
+        //
+        // Cases 2 and 3 both have an AUTHORIZE row (deferred capture), making them
+        // indistinguishable via a DB check.  Attempting to skip status-history/email
+        // for case 2 would also skip them for case 3, where they were never written.
+        //
+        // Therefore the only case where we can safely skip full processing is case 1:
+        // the checkout immediate-capture (no AUTHORIZE row), where everything including
+        // NOTIFY_PAYPALR_FUNDS_CAPTURED was already handled.  For all deferred captures
+        // the webhook always runs full processing; DoCapture may produce a duplicate
+        // history entry (pre-existing cosmetic issue), but the financial notifier fires
+        // exactly once.
+        //
+        // MUST read pre-sync state: syncPaypalTxns() advances PENDING→COMPLETED, so
+        // reading after the sync would mask a genuine pending-capture transition.
+        //
+        $already_completed_at_checkout = $this->captureAlreadyCompleted((int)$oID, (string)$txnID)
+            && !$this->orderWasDeferredCapture((int)$oID);
 
         // Sync our database with all updates from PayPal
         $this->getApiAndCredentials();
         $ppr_txns = new GetPayPalOrderTransactions($this->paymentModule->code, $this->paymentModule->getCurrentVersion(), $oID, $this->ppr);
         $ppr_txns->syncPaypalTxns();
 
-        if ($already_completed === true) {
-            // -----
-            // The status-history rows and merchant alert email were already written by
-            // whichever code path first recorded this capture as COMPLETED, so skip them.
-            //
-            // However, the two capture paths fire *different* notifiers:
-            //   - Checkout before_process() fires NOTIFY_PAYPALR_FUNDS_CAPTURED (paypalr.php:2053).
-            //   - Admin DoCapture fires only NOTIFY_PAYPALR_ADMIN_FUNDS_IN_OUT via addDbTransaction().
-            //
-            // For admin-initiated captures the webhook is therefore the only opportunity to
-            // fire NOTIFY_PAYPALR_FUNDS_CAPTURED.  Detect the admin path by the presence of an
-            // AUTHORIZE row: immediate checkout sales are a single create+capture transaction
-            // (no AUTHORIZE row); deferred admin captures always follow a prior authorization.
-            //
-            if ($this->orderWasDeferredCapture((int)$oID)) {
-                $this->log->write("PAYMENT.CAPTURE.COMPLETED - capture $txnID for order $oID was admin-initiated; status-history/email already written, firing NOTIFY_PAYPALR_FUNDS_CAPTURED.");
-                $zco_notifier->notify('NOTIFY_PAYPALR_FUNDS_CAPTURED', ['webhook' => $this->data]);
-            } else {
-                $this->log->write("PAYMENT.CAPTURE.COMPLETED - capture $txnID for order $oID was already fully processed by checkout; skipping duplicate status-history, merchant email and NOTIFY_PAYPALR_FUNDS_CAPTURED.");
-            }
+        if ($already_completed_at_checkout === true) {
+            $this->log->write("PAYMENT.CAPTURE.COMPLETED - capture $txnID for order $oID was already fully processed by checkout; skipping duplicate status-history, merchant email and NOTIFY_PAYPALR_FUNDS_CAPTURED.");
             return;
         }
 
@@ -129,6 +125,7 @@ class PaymentCaptureCompleted extends WebhookHandlerContract
         // funds-captured notification is being raised for it.  Fire it so that sites
         // which manage payments are aware of the incoming funds.
         //
+        global $zco_notifier;
         $zco_notifier->notify('NOTIFY_PAYPALR_FUNDS_CAPTURED', ['webhook' => $this->data]);
     }
 
