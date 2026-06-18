@@ -207,6 +207,7 @@ class WebhookResponder
         if (ini_get('allow_url_fopen')) {
             $context = stream_context_create([
                 'http' => ['follow_location' => 0, 'timeout' => 10],
+                'ssl'  => ['verify_peer' => true, 'verify_peer_name' => true],
             ]);
             $result = file_get_contents($url, false, $context);
         }
