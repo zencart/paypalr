@@ -21,6 +21,10 @@ class DoVoid
     {
         global $db, $messageStack;
 
+        if (!defined('IS_ADMIN_FLAG') || IS_ADMIN_FLAG !== true) {
+            return;
+        }
+
         if (!isset($_POST['ppr-void-id'], $_POST['doVoidOid'], $_POST['ppr-void-note']) || $oID !== (int)$_POST['doVoidOid']) {
             $messageStack->add_session(MODULE_PAYMENT_PAYPALR_VOID_PARAM_ERROR, 'error');
             return;
