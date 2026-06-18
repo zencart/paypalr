@@ -120,6 +120,17 @@ $_SESSION['PayPalRestful']['Order']['status'] = $order_status['status'];
 if ($op === 'return') {
     $_SESSION['PayPalRestful']['Order']['wallet_payment_confirmed'] = true;
 } else {
+    // -----
+    // ccInfo is always written to PayerAction at the point the 3DS link is issued
+    // (paypalr.php before_process).  Its absence here means the session is corrupted;
+    // treat it the same as other missing-PayerAction cases and redirect rather than
+    // storing an empty array that would let card processing proceed with no card fields.
+    //
+    if (!isset($_SESSION['PayPalRestful']['Order']['PayerAction']['ccInfo'])) {
+        $logger->write('ppr_listener, 3ds_return missing ccInfo in PayerAction; redirecting to checkout_payment.', true, 'after');
+        unset($_SESSION['PayPalRestful']['Order']['PayerAction']);
+        zen_redirect(zen_href_link(FILENAME_CHECKOUT_PAYMENT, '', 'SSL'));
+    }
     $_SESSION['PayPalRestful']['Order']['3DS_response'] = $_SESSION['PayPalRestful']['Order']['PayerAction']['ccInfo'];
     $_SESSION['PayPalRestful']['Order']['authentication_result'] = $auth_result;
 }
