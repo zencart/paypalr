@@ -49,15 +49,36 @@ class PaymentCaptureCompleted extends WebhookHandlerContract
             return;
         }
 
+        // -----
+        // Idempotency guard against duplicate capture-processing.
+        //
+        // A capture can be recorded *synchronously* by the storefront checkout flow
+        // (an immediate "Final Sale") or by the admin Orders page *before* PayPal
+        // delivers this PAYMENT.CAPTURE.COMPLETED webhook.  WebhookController's
+        // webhook_id idempotency guard only suppresses re-delivery of the *same*
+        // webhook event; it cannot know that another code path already recorded the
+        // capture.  Read our pre-sync record of this capture: if it is already marked
+        // COMPLETED, the order-status-history, merchant alert email and the
+        // NOTIFY_PAYPALR_FUNDS_CAPTURED notifier were already issued, so we must not
+        // repeat them here (duplicate history rows, duplicate emails, double-counted
+        // funds).  Reading the status *before* syncPaypalTxns() is essential: the sync
+        // itself advances a still-PENDING capture to COMPLETED, and a genuine
+        // pending->completed transition must still be processed.
+        //
+        $already_completed = $this->captureAlreadyCompleted((int)$oID, (string)$txnID);
+
         // Sync our database with all updates from PayPal
         $this->getApiAndCredentials();
         $ppr_txns = new GetPayPalOrderTransactions($this->paymentModule->code, $this->paymentModule->getCurrentVersion(), $oID, $this->ppr);
         $ppr_txns->syncPaypalTxns();
 
+        if ($already_completed === true) {
+            $this->log->write("PAYMENT.CAPTURE.COMPLETED - capture $txnID for order $oID was already recorded as COMPLETED; skipping duplicate status-history, merchant email and NOTIFY_PAYPALR_FUNDS_CAPTURED.");
+            return;
+        }
+
         // Update order-status records noting what's happened
         $summary = $this->data['summary'];
-
-        // @TODO check status: was it already captured previously (according to our internal records)? if yes, abort to prevent duplications
 
         $amount = $this->data['resource']['amount']['value'];
         $comments =
@@ -82,12 +103,44 @@ class PaymentCaptureCompleted extends WebhookHandlerContract
             sprintf(MODULE_PAYMENT_PAYPALR_ALERT_ORDER_CREATION, $oID, $this->data['resource']['status'])
         );
 
-        // @TODO - is this risking duplication if the order was already captured in-real-time?
-        // If funds have been captured, fire a notification so that sites that
-        // manage payments are aware of the incoming funds.
+        // -----
+        // Reaching here means this capture had not previously been recorded as
+        // COMPLETED in our records (guarded above), so this is the first time the
+        // funds-captured notification is being raised for it.  Fire it so that sites
+        // which manage payments are aware of the incoming funds.
         //
         global $zco_notifier;
         $zco_notifier->notify('NOTIFY_PAYPALR_FUNDS_CAPTURED', ['webhook' => $this->data]);
+    }
+
+    /**
+     * Determine whether our records already show this capture transaction as COMPLETED.
+     *
+     * Idempotency guard so a PAYMENT.CAPTURE.COMPLETED webhook does not duplicate the
+     * order-status-history, merchant alert email and funds-captured notifier already
+     * issued when the capture was recorded by the storefront checkout or admin Orders
+     * page.  MUST be called *before* syncPaypalTxns(), which would otherwise advance a
+     * still-PENDING capture to COMPLETED and mask a genuine transition.
+     */
+    protected function captureAlreadyCompleted(int $oID, string $txn_id): bool
+    {
+        global $db;
+
+        if ($oID <= 0 || $txn_id === '') {
+            return false;
+        }
+
+        $txn_id = $db->prepare_input($txn_id);
+        $check = $db->ExecuteNoCache(
+            "SELECT txn_id
+               FROM " . TABLE_PAYPAL . "
+              WHERE order_id = " . $oID . "
+                AND txn_id = '" . $txn_id . "'
+                AND txn_type = 'CAPTURE'
+                AND payment_status = 'COMPLETED'
+              LIMIT 1"
+        );
+        return !$check->EOF;
     }
 }
 
