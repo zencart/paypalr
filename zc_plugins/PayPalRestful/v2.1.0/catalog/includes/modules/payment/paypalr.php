@@ -439,31 +439,6 @@ class paypalr extends \base
         //
         if ($installed_version !== null) {
             switch (true) {
-                // -----
-                // v2.1.0: Add UNIQUE constraint on paypal_webhooks.webhook_id so the
-                // idempotency guard in WebhookController::alreadyProcessed() is atomic
-                // (INSERT failure on duplicate key, not a SELECT-then-INSERT race).
-                //
-                // Deduplicate first: if PayPal re-delivered before the guard was in place,
-                // duplicate rows may exist; keep the earliest record for each event-id.
-                //
-                case version_compare($installed_version, '2.1.0', '<'):
-                    defined('TABLE_PAYPAL_WEBHOOKS') or define('TABLE_PAYPAL_WEBHOOKS', DB_PREFIX . 'paypal_webhooks');
-                    if ($sniffer->table_exists(TABLE_PAYPAL_WEBHOOKS)) {
-                        $db->Execute(
-                            "DELETE w1 FROM " . TABLE_PAYPAL_WEBHOOKS . " w1
-                               INNER JOIN " . TABLE_PAYPAL_WEBHOOKS . " w2
-                                  ON w2.webhook_id = w1.webhook_id
-                                 AND w2.id < w1.id"
-                        );
-                        if ($sniffer->index_exists(TABLE_PAYPAL_WEBHOOKS, 'idx_pprwebhook_unique') === false) {
-                            $db->Execute(
-                                "ALTER TABLE " . TABLE_PAYPAL_WEBHOOKS . "
-                                   ADD UNIQUE KEY idx_pprwebhook_unique (webhook_id)"
-                            );
-                        }
-                    }
-
                 /* falls through */
                 case version_compare($installed_version, '1.1.1', '<'):
                     $db->Execute(
@@ -502,6 +477,31 @@ class paypalr extends \base
                           WHERE configuration_key = 'MODULE_PAYMENT_PAYPALR_PAYLATER_MESSAGING'
                           LIMIT 1"
                     );
+
+                // -----
+                // v2.1.0: Add UNIQUE constraint on paypal_webhooks.webhook_id so the
+                // idempotency guard in WebhookController::alreadyProcessed() is atomic
+                // (INSERT failure on duplicate key, not a SELECT-then-INSERT race).
+                //
+                // Deduplicate first: if PayPal re-delivered before the guard was in place,
+                // duplicate rows may exist; keep the earliest record for each event-id.
+                //
+                case version_compare($installed_version, '2.1.0', '<'):
+                    defined('TABLE_PAYPAL_WEBHOOKS') or define('TABLE_PAYPAL_WEBHOOKS', DB_PREFIX . 'paypal_webhooks');
+                    if ($sniffer->table_exists(TABLE_PAYPAL_WEBHOOKS)) {
+                        $db->Execute(
+                            "DELETE w1 FROM " . TABLE_PAYPAL_WEBHOOKS . " w1
+                               INNER JOIN " . TABLE_PAYPAL_WEBHOOKS . " w2
+                                  ON w2.webhook_id = w1.webhook_id
+                                 AND w2.id < w1.id"
+                        );
+                        if (!$sniffer->index_exists(TABLE_PAYPAL_WEBHOOKS, 'idx_pprwebhook_unique')) {
+                            $db->Execute(
+                                "ALTER TABLE " . TABLE_PAYPAL_WEBHOOKS . "
+                                   ADD UNIQUE KEY idx_pprwebhook_unique (webhook_id)"
+                            );
+                        }
+                    }
 
                 /* falls through */
                 default:
