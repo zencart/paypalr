@@ -2390,6 +2390,14 @@ class paypalr extends \base
         $db->Execute("DELETE FROM " . TABLE_CONFIGURATION . " WHERE configuration_key LIKE 'MODULE\_PAYMENT\_PAYPALR\_%'");
 
         // -----
+        // Drop the webhook-log table created by this plugin.  It is not a Zen Cart
+        // core table, so removing it on uninstall avoids leaving orphaned data in
+        // the database.
+        //
+        defined('TABLE_PAYPAL_WEBHOOKS') or define('TABLE_PAYPAL_WEBHOOKS', DB_PREFIX . 'paypal_webhooks');
+        $db->Execute("DROP TABLE IF EXISTS " . TABLE_PAYPAL_WEBHOOKS);
+
+        // -----
         // Starting with v1.1.1, removing the payment module includes deleting its root-directory
         // listener and webhook handlers, and the prior versions' ppr_webhook_main.php handler.
         //
