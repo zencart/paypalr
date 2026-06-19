@@ -78,6 +78,11 @@ class WebhookResponder
         if ($valid !== null) {
             // send a 200 response to acknowledge that we received the webhook
             http_response_code(200);
+        } else {
+            // Verification could not complete (cert unreachable, OpenSSL absent, access-token
+            // invalid, etc.).  Signal a transient server error so PayPal retries delivery
+            // rather than silently treating the unverified event as acknowledged.
+            http_response_code(500);
         }
 
         return $valid;
