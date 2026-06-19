@@ -41,7 +41,7 @@ try {
     // Return 500 so PayPal retries delivery; the INSERT IGNORE idempotency guard
     // makes retries safe.  Log to the server error log, not to the HTTP response.
     http_response_code(500);
-    error_log('ppr_webhook: unhandled exception: ' . $e->getMessage());
+    trigger_error("ppr_webhook: unhandled exception: " . $e->getMessage(), E_USER_WARNING);
 }
 
 // properly shut down the application
