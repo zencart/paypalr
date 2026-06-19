@@ -54,8 +54,9 @@ class PaymentCaptureCompleted extends WebhookHandlerContract
         //
         // Three pre-webhook capture paths exist, each leaving different DB state:
         //
-        //   1. Checkout before_process() (immediate "Final Sale"): writes status-history,
-        //      sends merchant alert email, and fires NOTIFY_PAYPALR_FUNDS_CAPTURED.
+        //   1. Checkout immediate "Final Sale" (before_process()/after_process())
+        //      records the capture as COMPLETED, adds an order_status entry,
+        //      and fires NOTIFY_PAYPALR_FUNDS_CAPTURED.
         //      Identifiable by the absence of an AUTHORIZE row (create+capture is a
         //      single transaction, no prior authorization step).
         //
@@ -133,9 +134,10 @@ class PaymentCaptureCompleted extends WebhookHandlerContract
      * Determine whether our records already show this capture transaction as COMPLETED.
      *
      * Idempotency guard so a PAYMENT.CAPTURE.COMPLETED webhook does not duplicate the
-     * order-status-history, merchant alert email and funds-captured notifier already
-     * issued when the capture was recorded by the storefront checkout or admin Orders
-     * page.  MUST be called *before* syncPaypalTxns(), which would otherwise advance a
+     * order-status-history updates and NOTIFY_PAYPALR_FUNDS_CAPTURED notifier call
+     * already performed by the immediate-capture checkout flow.
+     *
+     * MUST be called *before* syncPaypalTxns(), which would otherwise advance a
      * still-PENDING capture to COMPLETED and mask a genuine transition.
      */
     protected function captureAlreadyCompleted(int $oID, string $txn_id): bool
