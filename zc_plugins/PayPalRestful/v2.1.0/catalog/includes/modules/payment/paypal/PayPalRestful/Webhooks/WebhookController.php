@@ -75,21 +75,19 @@ class WebhookController
 
         $this->ppr_logger->write("\n\n" . 'webhook verification passed', false, 'before');
 
-        // -----
-        // Idempotency guard. PayPal delivers webhook events at-least-once (it
-        // re-sends on timeout or any non-2xx response) and a signed payload can be
-        // replayed verbatim, so the same event-id must not be processed twice.
-        // Re-processing would create duplicate order-status records, re-send
-        // customer/merchant emails and re-fire the funds-captured notifier.
-        //
-        // The primary gate is the UNIQUE(webhook_id) constraint on the table: we
-        // attempt the INSERT first; if it raises a duplicate-key error the event
-        // was already recorded and we return early.  This is atomic — two
-        // simultaneous deliveries of the same event-id both attempt the INSERT
-        // and exactly one succeeds.  The pre-flight alreadyProcessed() SELECT
-        // is retained as a fast-path to avoid the DB exception overhead for the
-        // common case of a sequential retry.
-        //
+        /**
+         * Idempotency guard. PayPal delivers webhook events at-least-once
+         * (it re-sends on timeout or any non-2xx response) and a signed payload can
+         * be replayed verbatim, so the same event-id must not be processed twice.
+         * Re-processing would create duplicate order-status records, and re-send
+         * customer/merchant emails and re-fire the funds-captured notifier.
+         *
+         * The primary gate is the UNIQUE(webhook_id) constraint on the table.
+         * We keep a pre-flight alreadyProcessed() SELECT as a fast-path for the
+         * common case of sequential retries, then we do an atomic INSERT IGNORE:
+         * for concurrent duplicate deliveries, exactly one INSERT succeeds and
+         * the other is ignored (0 affected rows) and returns early.
+         */
         $this->createDatabaseTable();
         $webhook_id = substr((string)($json_body['id'] ?? ''), 0, 64);
         if ($webhook_id !== '' && $this->alreadyProcessed($webhook_id)) {
@@ -97,9 +95,11 @@ class WebhookController
             return true;
         }
 
-        // Log that we received a validated webhook; treat a duplicate-key error
-        // (two simultaneous deliveries that both passed the SELECT above) as an
-        // already-processed event.
+        /**
+         * Log that we received a validated webhook; treat a duplicate-key error
+         * (two simultaneous webhooks that both passed the SELECT above) as an
+         * already-processed event.
+         */
         if ($this->saveToDatabase($user_agent, $request_method, $request_body, $request_headers) === false) {
             $this->ppr_logger->write("ppr_webhook DUPLICATE event ignored on INSERT (webhook_id: $webhook_id).", false, 'before');
             return true;
@@ -115,7 +115,7 @@ class WebhookController
         $objectName = 'PayPalRestful\Webhooks\Events\\' . $this->strToStudly($event);
 
         if (class_exists($objectName)) {
-//debug:    $this->ppr_logger->write('class found: ' . $objectName, false, 'before');
+            //debug: $this->ppr_logger->write('class found: ' . $objectName, false, 'before');
 
             $call = new $objectName($webhook);
             if ($call->eventTypeIsSupported()) {
@@ -142,12 +142,11 @@ class WebhookController
     }
 
     /**
-     * Save webhook records to database for subsequent querying
+     * Save webhook records to the database for subsequent querying
      *
-     * Returns true on success, false if the INSERT fails on the UNIQUE(webhook_id)
-     * constraint — which means the event was already recorded by a concurrent
-     * delivery and the caller should treat it as a duplicate.
-     *
+     *  Returns true on success, false if the INSERT is ignored due to the
+     *  UNIQUE(webhook_id) constraint — which means the event was already recorded
+     *  by a concurrent delivery and the caller should treat it as a duplicate.
      */
     protected function saveToDatabase(string $user_agent, string $request_method, string $request_body, array $request_headers): bool
     {
@@ -167,11 +166,11 @@ class WebhookController
         // ensure table exists
         $this->createDatabaseTable();
 
-        // -----
-        // Use INSERT IGNORE so a duplicate webhook_id (UNIQUE constraint) silently
-        // fails instead of throwing a DB exception.  We detect the duplicate by
-        // checking whether any row was actually inserted (affected_rows = 0 on skip).
-        //
+        /**
+         * Use INSERT IGNORE so a duplicate webhook_id (UNIQUE constraint) silently
+         * fails instead of throwing a DB exception.  We detect the duplicate by
+         * checking whether any row was actually inserted (affected_rows = 0 on skip).
+         */
         $columns_sql = implode(', ', array_keys($sql_data_array));
         $values_sql  = implode(', ', array_map(
             static fn($v) => "'" . $db->prepare_input((string)$v) . "'",

@@ -439,7 +439,6 @@ class paypalr extends \base
         //
         if ($installed_version !== null) {
             switch (true) {
-                /* falls through */
                 case version_compare($installed_version, '1.1.1', '<'):
                     $db->Execute(
                         "UPDATE " . TABLE_CONFIGURATION . "
@@ -454,7 +453,7 @@ class paypalr extends \base
                             ('Trigger 3D Secure on <b>Every</b> Txn?', 'MODULE_PAYMENT_PAYPALR_SCA_ALWAYS', 'false', 'Choose <var>true</var> to trigger 3D Secure for <b>every</b> transaction, regardless of SCA requirements.<br><br><b>Default</b>: <var>false</var>', 6, 0, 'zen_cfg_select_option([\'true\', \'false\'], ', NULL, now())"
                     );
 
-                /* falls through */
+                /* no break */
                 case version_compare($installed_version, '1.2.0', '<'): //- Fall through from above
                     $db->Execute(
                         "INSERT IGNORE INTO " . TABLE_CONFIGURATION . "
@@ -463,7 +462,7 @@ class paypalr extends \base
                             ('Store (Sub-Brand) Identifier at PayPal', 'MODULE_PAYMENT_PAYPALR_SOFT_DESCRIPTOR', '', 'On customer credit card statements, your company name will show as <code>PAYPAL*(yourname)*(your-sub-brand-name)</code> (max 22 letters for (yourname)*(your-sub-brand-name)). You can add the sub-brand-name here if you want to differentiate purchases from this store vs any other PayPal sales you make.', 6, 0, NULL, NULL, now())"
                     );
 
-                /* falls through */
+                /* no break */
                 case version_compare($installed_version, '1.3.0', '<'): //- Fall through from above
                     $db->Execute(
                         "INSERT IGNORE INTO " . TABLE_CONFIGURATION . "
@@ -477,14 +476,14 @@ class paypalr extends \base
                           WHERE configuration_key = 'MODULE_PAYMENT_PAYPALR_PAYLATER_MESSAGING'
                           LIMIT 1"
                     );
+                /* no break */
 
                 // -----
                 // v2.1.0: Add UNIQUE constraint on paypal_webhooks.webhook_id so the
-                // idempotency guard in WebhookController::alreadyProcessed() is atomic
-                // (INSERT failure on duplicate key, not a SELECT-then-INSERT race).
+                // idempotency guard in WebhookController::saveToDatabase() is atomic
+                // (duplicate inserts are rejected/ignored by the unique key).
                 //
-                // Deduplicate first: if PayPal re-delivered before the guard was in place,
-                // duplicate rows may exist; keep the earliest record for each event-id.
+                // Deduplicate first: keep the earliest record for each event-id.
                 //
                 case version_compare($installed_version, '2.1.0', '<'):
                     defined('TABLE_PAYPAL_WEBHOOKS') or define('TABLE_PAYPAL_WEBHOOKS', DB_PREFIX . 'paypal_webhooks');
@@ -503,7 +502,7 @@ class paypalr extends \base
                         }
                     }
 
-                /* falls through */
+                /* no break */
                 default:
                     break;
             }
