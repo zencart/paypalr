@@ -34,7 +34,7 @@ class ScriptedInstaller extends ScriptedInstallBase
         // 'remove' method to (er) remove the configuration settings as well as the root-directory
         // files.
         //
-        if (defined('MODULE_PAYMENT_PAYPALR_STATUS')) {
+        if (zen_config('MODULE_PAYMENT_PAYPALR_STATUS') !== null) {
             require_once $this->pluginDir . '/catalog/includes/modules/payment/paypalr.php';
             $paypalr = new paypalr(uninstalling: true);   //- Let the payment module know it's loading to do an uninstall action
             $paypalr->remove();
