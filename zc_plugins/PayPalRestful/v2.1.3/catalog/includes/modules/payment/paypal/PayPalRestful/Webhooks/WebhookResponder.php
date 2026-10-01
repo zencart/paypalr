@@ -38,7 +38,8 @@ class WebhookResponder
     {
         $headers = array_change_key_case($this->webhook->getHeaders(), CASE_UPPER);
         $data = $this->webhook->getJsonBody();
-        if (array_key_exists('PAYPAL-AUTH-VERSION', $headers)
+        if ($this->webhook->getMethod() === 'POST'
+            && array_key_exists('PAYPAL-AUTH-VERSION', $headers)
             && array_key_exists('PAYPAL-AUTH-ALGO', $headers)
             && isset($data['event_type'])
             && \str_contains($this->webhook->getUserAgent(), 'PayPal/')
@@ -142,10 +143,22 @@ class WebhookResponder
     }
 
     /**
-     * @return bool|null  returns null if unable to use CURL or if the access token is invalid.
+     * @return bool|null  returns null when the verification could not be completed:
+     *                    no subscribed-webhook id, required headers absent, CURL
+     *                    unusable, an invalid access token, or no verdict from PayPal.
      */
     protected function verifyByPostback(string $certUrl): ?bool
     {
+        /**
+         * PayPal requires the subscribed-webhook id to answer a signature postback.
+         * Without one the request cannot be completed, so return the same
+         * "unable to verify" result up front rather than spending an API call
+         * (and an access-token refresh) to be told so.
+         */
+        if (empty($this->webhook_listener_subscribe_id)) {
+            return null;
+        }
+
         $headers = array_change_key_case($this->webhook->getHeaders(), CASE_UPPER);
         if (!isset($headers['PAYPAL-TRANSMISSION-ID'], $headers['PAYPAL-TRANSMISSION-TIME'], $headers['PAYPAL-TRANSMISSION-SIG'])) {
             return null; // required headers absent; cannot build a valid postback payload
@@ -171,10 +184,13 @@ class WebhookResponder
             return null; // Unable to get a current access token.
         }
 
-        // Now that the access token is confirmed, we submit this postback via CURL.
-        $result = $ppr->webhookVerifyByPostback($params_array);
-
-        return $result === true;
+        /**
+         * Now that the access token is confirmed, submit this postback via CURL.
+         * A null result means PayPal returned no verdict (interface error, rate
+         * limit, unexpected response); pass that through rather than flattening it
+         * to "failed", so the event is left to be delivered again.
+         */
+        return $ppr->webhookVerifyByPostback($params_array);
     }
 
     /**
