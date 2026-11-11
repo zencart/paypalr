@@ -2344,9 +2344,12 @@ class paypalr extends \base
             $source_file = $this->pluginManagerInstalledVersionDirectory . "catalog/includes/modules/payment/paypal/PayPalRestful/$next_file";
             $target_file = DIR_FS_CATALOG . $next_file;
 
-            $file_contents = file_get_contents($source_file);
-            file_put_contents($target_file, $file_contents);
-
+            if(md5_file($source_file) !== md5_file($target_file))
+            {
+                $file_contents = file_get_contents($source_file);
+                file_put_contents($target_file, $file_contents);
+            }
+            
             if (!file_exists($target_file) || filesize($source_file) !== filesize($target_file)) {
                 $files_ok = false;
                 $problem_files[] = $next_file;
