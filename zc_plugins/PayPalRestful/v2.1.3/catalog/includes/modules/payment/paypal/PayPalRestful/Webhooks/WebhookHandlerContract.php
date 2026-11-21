@@ -42,12 +42,28 @@ abstract class WebhookHandlerContract
 
     /**
      * Instantiate paypalr payment module, including its language string dependencies.
+     *
+     * Zen Cart's payment class publishes $GLOBALS['paypalr'] only when the module
+     * reports itself enabled, so a module that disabled itself while loading -- because
+     * PayPal was unreachable, say -- leaves nothing to assign here.  Throw, rather than
+     * letting the typed-property assignment raise a bare TypeError: ppr_webhook.php
+     * answers 500 so PayPal retries the delivery once the module is usable again, and
+     * the reason reaches the error log (GitHub issue #51).
      */
     protected function loadCorePaymentModuleAndLanguageStrings(): void
     {
         require DIR_WS_CLASSES . 'payment.php';
         $payment_modules = new \payment ('paypalr');
-        $this->paymentModule = $GLOBALS[$payment_modules->selected_module];
+
+        $payment_module = $GLOBALS[$payment_modules->selected_module ?? ''] ?? null;
+        if (!($payment_module instanceof \paypalr)) {
+            throw new \RuntimeException(
+                'Webhook ' . $this->eventType . ' cannot be processed: the paypalr payment module is not currently loadable. ' .
+                'Check that it is installed and enabled, and that PayPal is reachable from this server.'
+            );
+        }
+
+        $this->paymentModule = $payment_module;
     }
 
     /**
