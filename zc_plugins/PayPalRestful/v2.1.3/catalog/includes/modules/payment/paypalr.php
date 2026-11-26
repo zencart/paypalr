@@ -633,7 +633,7 @@ class paypalr extends \base
         // that they're valid PayPal credentials.
         //
         $error_message = '';
-        $paypal_unreachable = false;
+        $paypal_gave_no_verdict = false;
         if ($client_id === '' || $secret === '') {
             $error_message = ($uninstalling === false) ? sprintf(MODULE_PAYMENT_PAYPALR_ERROR_CREDS_NEEDED, zen_config('MODULE_PAYMENT_PAYPALR_SERVER')) : 'no-client';
         } else {
@@ -659,15 +659,21 @@ class paypalr extends \base
                 // to reach checkout would then auto-disable the payment module
                 // (GitHub issue #51).
                 //
+                // Enumerate the rejections rather than the failures, so that a
+                // response nobody anticipated is treated as "no verdict" instead of
+                // as grounds to disable the module.  Enumerating failures gets this
+                // backwards: handleResponse() reports an undecodable body on an HTTP
+                // 200 by setting errNum to 200 and returning false, which no list of
+                // failure statuses would ever catch.
+                //
                 $error_number = (int)($this->ppr->getErrorInfo()['errNum'] ?? 0);
-                $paypal_gave_no_verdict = [
-                    PayPalRestfulApi::ERR_CURL_ERROR,   // curl_exec failed
-                    PayPalRestfulApi::ERR_NO_CHANNEL,   // curl_init failed
-                    408,                                // Request Timeout
-                    429,                                // Too Many Requests
+                $paypal_rejected_the_credentials = [
+                    400,    // Bad Request -- malformed grant
+                    401,    // Unauthorized -- client id/secret not accepted
+                    403,    // Forbidden -- credentials not entitled to this call
                 ];
-                $paypal_unreachable = (in_array($error_number, $paypal_gave_no_verdict, true) || $error_number >= 500);
-                if ($paypal_unreachable === false) {
+                $paypal_gave_no_verdict = !in_array($error_number, $paypal_rejected_the_credentials, true);
+                if ($paypal_gave_no_verdict === false) {
                     $error_message = ($uninstalling === false) ? sprintf(MODULE_PAYMENT_PAYPALR_ERROR_INVALID_CREDS, zen_config('MODULE_PAYMENT_PAYPALR_SERVER')) : 'invalid-creds';
                 }
             }
@@ -679,7 +685,7 @@ class paypalr extends \base
         // disproved.  The payment module is unusable for this request, but its
         // configuration is left exactly as the merchant set it.
         //
-        if ($paypal_unreachable === true) {
+        if ($paypal_gave_no_verdict === true) {
             $error_info = $this->ppr->getErrorInfo();
             $unreachable_message =
                 'paypalr: PayPal gave no verdict while validating credentials; ' .
