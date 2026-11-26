@@ -209,8 +209,16 @@ class paypalr extends \base
             return;
         }
 
-        // @TODO - "Retired" check should accommodate 'webhook' mode too, because we do want to still respond to webhooks when in Retired mode.
-        $this->enabled = (zen_config('MODULE_PAYMENT_PAYPALR_STATUS') === 'True' || (IS_ADMIN_FLAG === true && zen_config('MODULE_PAYMENT_PAYPALR_STATUS') === 'Retired'));
+        // -----
+        // A 'Retired' module is not offered to storefront shoppers, but it must remain
+        // loadable for the admin and for incoming webhooks: transactions placed before
+        // the module was retired still generate captures, refunds and reversals that
+        // have to be recorded against their orders.  Without this, a webhook arriving
+        // for a retired module cannot load the payment module at all and the delivery
+        // is answered 500 (GitHub issue #51).
+        //
+        $module_status = zen_config('MODULE_PAYMENT_PAYPALR_STATUS');
+        $this->enabled = ($module_status === 'True' || ($module_status === 'Retired' && (IS_ADMIN_FLAG === true || ($loaderPrefix ?? '') === 'webhook')));
 
         $this->errorInfo = new ErrorInfo();
 
@@ -625,6 +633,7 @@ class paypalr extends \base
         // that they're valid PayPal credentials.
         //
         $error_message = '';
+        $paypal_gave_no_verdict = false;
         if ($client_id === '' || $secret === '') {
             $error_message = ($uninstalling === false) ? sprintf(MODULE_PAYMENT_PAYPALR_ERROR_CREDS_NEEDED, zen_config('MODULE_PAYMENT_PAYPALR_SERVER')) : 'no-client';
         } else {
@@ -634,9 +643,57 @@ class paypalr extends \base
             $use_saved_credentials = (IS_ADMIN_FLAG === false || $current_page === FILENAME_MODULES);
             $this->log->write("validateCredentials: Checking ($use_saved_credentials).", true, 'before');
             if ($this->ppr->validatePayPalCredentials($use_saved_credentials) === false) {
-                $error_message = ($uninstalling === false) ? sprintf(MODULE_PAYMENT_PAYPALR_ERROR_INVALID_CREDS, zen_config('MODULE_PAYMENT_PAYPALR_SERVER')) : 'invalid-creds';
+                // -----
+                // Distinguish PayPal giving no verdict -- a connection failure, a timeout,
+                // no CURL channel, or an HTTP status that means "not now" rather than
+                // "no" -- from PayPal actually rejecting the credentials.  Only a
+                // rejection means the configuration is wrong.
+                //
+                // The HTTP cases matter as much as the CURL ones, because handleResponse()
+                // reports an HTTP failure by setting errNum to the status code: a 429 or a
+                // 5xx arrives here looking exactly like a rejection.  That is reachable
+                // from outside.  Every webhook delivery starts a fresh session, so
+                // TokenCache always misses and each delivery spends an OAuth call, which
+                // means unauthenticated traffic to the webhook endpoint can push this
+                // store's credentials into PayPal's rate limiter -- and the next shopper
+                // to reach checkout would then auto-disable the payment module
+                // (GitHub issue #51).
+                //
+                // Enumerate the rejections rather than the failures, so that a
+                // response nobody anticipated is treated as "no verdict" instead of
+                // as grounds to disable the module.  Enumerating failures gets this
+                // backwards: handleResponse() reports an undecodable body on an HTTP
+                // 200 by setting errNum to 200 and returning false, which no list of
+                // failure statuses would ever catch.
+                //
+                $error_number = (int)($this->ppr->getErrorInfo()['errNum'] ?? 0);
+                $paypal_rejected_the_credentials = [
+                    400,    // Bad Request -- malformed grant
+                    401,    // Unauthorized -- client id/secret not accepted
+                    403,    // Forbidden -- credentials not entitled to this call
+                ];
+                $paypal_gave_no_verdict = !in_array($error_number, $paypal_rejected_the_credentials, true);
+                if ($paypal_gave_no_verdict === false) {
+                    $error_message = ($uninstalling === false) ? sprintf(MODULE_PAYMENT_PAYPALR_ERROR_INVALID_CREDS, zen_config('MODULE_PAYMENT_PAYPALR_SERVER')) : 'invalid-creds';
+                }
             }
             $this->log->write('', false, 'after');
+        }
+
+        // -----
+        // PayPal gave no verdict, so the credentials are neither confirmed nor
+        // disproved.  The payment module is unusable for this request, but its
+        // configuration is left exactly as the merchant set it.
+        //
+        if ($paypal_gave_no_verdict === true) {
+            $error_info = $this->ppr->getErrorInfo();
+            $unreachable_message =
+                'paypalr: PayPal gave no verdict while validating credentials; ' .
+                'the payment module is unavailable for this request but has not been disabled. ' .
+                "({$error_info['errNum']}/{$error_info['curlErrno']}) {$error_info['errMsg']}";
+            $this->log->write($unreachable_message, true, 'before');
+            trigger_error($unreachable_message, E_USER_WARNING);
+            return false;
         }
 
         // -----
