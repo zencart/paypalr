@@ -1127,6 +1127,22 @@ class paypalr extends \base
         // Save the posted variables from the payment phase of checkout; the ppr_listener will use those to restore after
         // PayPal returns.
         //
+        // Note: Each posted variable's value must either be of type string or an array of strings!
+        //
+        foreach ($_POST as $key => $value) {
+            if (is_string($value)) {
+                continue;
+            } elseif (!is_array($value)) {
+                $this->setMessageAndRedirect(sprintf(MODULE_PAYMENT_PAYPALR_TEXT_GENERAL_ERROR, MODULE_PAYMENT_PAYPALR_TEXT_TITLE), FILENAME_CHECKOUT_PAYMENT);
+            } else {
+                foreach ($value as $sub_key => $sub_value) {
+                    if (!is_string($sub_value)) {
+                        $this->setMessageAndRedirect(sprintf(MODULE_PAYMENT_PAYPALR_TEXT_GENERAL_ERROR, MODULE_PAYMENT_PAYPALR_TEXT_TITLE), FILENAME_CHECKOUT_PAYMENT);
+                    }
+                }
+            }
+        }
+
         global $current_page_base;
         $_SESSION['PayPalRestful']['Order']['PayerAction'] = [
             'current_page_base' => $current_page_base,
