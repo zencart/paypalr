@@ -7,7 +7,7 @@
  * @license http://www.zen-cart.com/license/2_0.txt GNU Public License V2.0
  * @version $Id: lat9 2026 Mar 17 New in v2.2.1 $
  *
- * Last updated: v2.1.0
+ * Last updated: v2.1.3
  */
 require 'includes/application_top.php';
 
@@ -54,7 +54,7 @@ if ($op === 'cancel' || $op === '3ds_cancel') {
     zen_redirect(zen_href_link(FILENAME_CHECKOUT_PAYMENT, '', 'SSL'));
 }
 
-if ($op === 'return' && (!isset($_GET['token'], $_SESSION['PayPalRestful']['Order']['id']) || $_GET['token'] !== $_SESSION['PayPalRestful']['Order']['id'])) {
+if ($op === 'return' && (!isset($_GET['token'], $_SESSION['PayPalRestful']['Order']['id']) || (string)$_GET['token'] !== $_SESSION['PayPalRestful']['Order']['id'])) {
     unset($_SESSION['PayPalRestful']['Order']);
     zen_redirect(zen_href_link(FILENAME_DEFAULT));  //- FIXME? Perhaps FILENAME_TIME_OUT would be better, since that would kill any session.
 }
@@ -165,7 +165,7 @@ if ($op === 'return') {
 //
 // NOTE: CSS-based spinner compliments of 'loading.io css spinner' ( https://loading.io/css/ )
 //
-$redirect_page = $_SESSION['PayPalRestful']['Order']['PayerAction']['current_page_base'];
+$redirect_page = $_SESSION['PayPalRestful']['Order']['PayerAction']['current_page_base'] ?? FILENAME_DEFAULT;
 $logger->write("Order's status set to {$order_status['status']}; posting back to $redirect_page.", true, 'after');
 ?>
 <html>
@@ -228,7 +228,7 @@ foreach ($_SESSION['PayPalRestful']['Order']['PayerAction']['savedPosts'] as $ke
 
     $array_key_name = $key . '[:sub_key:]';
     foreach ($value as $sub_key => $sub_value) {
-        echo zen_draw_hidden_field(str_replace(':sub_key:', $sub_key, $array_key_name), $sub_value);
+        echo zen_draw_hidden_field(str_replace(':sub_key:', (string)$sub_key, $array_key_name), $sub_value);
     }
 }
 unset($_SESSION['PayPalRestful']['Order']['PayerAction']);
